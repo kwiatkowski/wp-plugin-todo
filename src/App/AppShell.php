@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace MKTodo\App;
 
+use MKTodo\Cron\DoneCleanup;
 use MKTodo\Plugin;
 use WP;
 
@@ -103,6 +104,8 @@ final class AppShell
             'logoutUrl' => html_entity_decode(wp_logout_url(home_url('/')), ENT_QUOTES, 'UTF-8'),
             'adminUrl' => admin_url(),
             'version' => WP_PLUGIN_TODO_VERSION,
+            // finished tasks are trashed this many days after (0 = kept)
+            'doneRetentionDays' => DoneCleanup::retentionDays(),
         ];
     }
 }

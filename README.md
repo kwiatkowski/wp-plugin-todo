@@ -94,5 +94,6 @@ użytkownik, wylogowanie). Dodaje też skrót *Todo* w pasku admina.
 | `wp_plugin_todo/capability` | `manage_options` | kto może używać aplikacji i API |
 | `wp_plugin_todo/path` | `todo` | adres aplikacji |
 | `wp_plugin_todo/app_index` | `{web root}/todo/web/index.html` | plik index.html zbudowanej aplikacji |
+| `wp_plugin_todo/done_retention_days` | `30` | po ilu dniach od ukończenia zadanie trafia do kosza (codzienne zadanie cron `wp_plugin_todo/cleanup_done`); `0` – nigdy |
 
 Z MK Core plugin dokłada swoją kartę do widgetu „Informacje o serwisie”.

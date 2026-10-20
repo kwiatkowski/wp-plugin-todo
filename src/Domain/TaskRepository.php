@@ -135,6 +135,29 @@ final class TaskRepository
         return true;
     }
 
+    /**
+     * Moves to the trash the tasks finished before `$cutoff` (ISO 8601 UTC, the format completedAt is stored in,
+     * so the strings compare in time order). Open tasks are never touched.
+     *
+     * @return int how many were moved
+     */
+    public function trashDoneBefore(string $cutoff): int
+    {
+        $ids = get_posts([
+            'post_type' => ContentTypes::TASK,
+            'post_status' => 'private',
+            'numberposts' => -1,
+            'fields' => 'ids',
+            'no_found_rows' => true,
+            'meta_query' => [
+                ['key' => ContentTypes::META_DONE, 'value' => '1'],
+                ['key' => ContentTypes::META_COMPLETED_AT, 'value' => $cutoff, 'compare' => '<'],
+            ],
+        ]);
+
+        return count(array_filter($ids, static fn (int $id): bool => (bool) wp_trash_post($id)));
+    }
+
     /** Moves the task to the trash – it can still be restored in wp-admin. */
     public function delete(int $id): true|WP_Error
     {

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace MKTodo;
 
 use MKTodo\App\AppShell;
+use MKTodo\Cron\DoneCleanup;
 use MKTodo\Domain\AreaCopier;
 use MKTodo\Domain\AreaRepository;
 use MKTodo\Domain\ProjectCopier;
@@ -21,6 +22,7 @@ use MKTodo\Rest\TasksController;
  *  - `wp_plugin_todo/capability` (string) – who may use the app and the API, default "manage_options"
  *  - `wp_plugin_todo/path` (string)       – URL path of the app, default "todo"
  *  - `wp_plugin_todo/app_index` (string)  – built index.html of the Vue app, default {web root}/todo/web/index.html
+ *  - `wp_plugin_todo/done_retention_days` (int) – finished tasks go to the trash this many days after, default 30, 0 = never
  */
 final class Plugin
 {
@@ -35,6 +37,7 @@ final class Plugin
         (new ProjectsController($projects, new ProjectCopier($projects, $tasks)))->register();
         (new TasksController($tasks))->register();
         (new AppShell())->register();
+        (new DoneCleanup($tasks))->register();
 
         add_filter('mk_core/dashboard/packages', [self::class, 'dashboardCard']);
     }
