@@ -24,7 +24,7 @@ Aplikację Vue klonuje się do `{web root}/todo` – szczegóły w jej README.
 
 | | Typ WordPressa | Pola |
 | --- | --- | --- |
-| Zadanie | post type `todo_task`, status `private` | tytuł, notatki (treść), `_todo_done`, `_todo_status`, `_todo_completed_at`, `_todo_due` (RRRR-MM-DD), `_todo_time` (GG:MM), `_todo_duration` (minuty), `_todo_priority`, `_todo_position` (kolejność) |
+| Zadanie | post type `todo_task`, status `private` | tytuł, notatki (treść), `_todo_done`, `_todo_status`, `_todo_completed_at`, `_todo_start` (RRRR-MM-DD, pierwszy dzień zadania na kilka dni), `_todo_due` (RRRR-MM-DD), `_todo_time` (GG:MM), `_todo_duration` (minuty), `_todo_priority`, `_todo_position` (kolejność) |
 | Projekt | taksonomia `todo_project` | nazwa, `_todo_color`, `_todo_area` (ID kategorii), `_todo_position` (kolejność w kategorii) |
 | Kategoria | taksonomia `todo_area` (tylko jako magazyn – zadania nie są do niej przypisywane) | nazwa, `_todo_position` (kolejność), `_todo_icon` (klucz ikony) |
 
@@ -43,8 +43,8 @@ Dostęp: zalogowany użytkownik z uprawnieniem `manage_options` (filtr `wp_plugi
 | Metoda | Ścieżka | Body |
 | --- | --- | --- |
 | GET | `/tasks` | – |
-| POST | `/tasks` | `{ title, notes?, done?, status?, due?, time?, duration?, priority?, projectId?, position? }` |
-| PATCH | `/tasks/{id}` | dowolne z powyższych; `null` czyści `due` / `time` / `duration` / `projectId` / `position` |
+| POST | `/tasks` | `{ title, notes?, done?, status?, start?, due?, time?, duration?, priority?, projectId?, position? }` |
+| PATCH | `/tasks/{id}` | dowolne z powyższych; `null` czyści `start` / `due` / `time` / `duration` / `projectId` / `position` |
 | DELETE | `/tasks/{id}` | – (do kosza) |
 | GET | `/projects` | – |
 | POST | `/projects` | `{ name, color?, areaId? }` |
@@ -77,7 +77,9 @@ kategoria: `{ "id": 3, "name": "Praca", "position": 0, "icon": "briefcase" }` (`
 z `done` (`done` = `status === "done"`). Wysłanie `status` ustawia też `done`, wysłanie samego `done`
 ustawia `status` na `done` / `todo`; gdy przyjdą oba, wygrywa `status`. Nowe zadanie ma `todo`.
 `time` to godzina rozpoczęcia w dniu `due` (`GG:MM`, 24h), `duration` – czas trwania w minutach (5–1440);
-wyczyszczenie `due` czyści też `time` i `duration`. `position` (liczba lub `null`) to ręczna kolejność zadań –
+wyczyszczenie `due` czyści też `start`, `time` i `duration`. Zadanie może trwać kilka dni: `start` to pierwszy dzień,
+`due` ostatni (`start` musi być ustawiony razem z `due` i nie po nim, inaczej 400; `start` równy `due` zapisuje się jako
+zadanie jednodniowe). Zadanie na kilka dni jest całodniowe – `time` i `duration` są wtedy czyszczone. `position` (liczba lub `null`) to ręczna kolejność zadań –
 aplikacja wstawia przeniesione zadanie między sąsiadów; zadania bez pozycji sortuje po dacie utworzenia. Tekst jest zapisywany dosłownie (bez wycinania „tagów”) –
 nigdy nie jest renderowany jako HTML. Błędy mają format WordPressa: `{ code, message, data: { status } }`.
 

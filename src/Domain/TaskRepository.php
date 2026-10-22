@@ -10,14 +10,15 @@ use WP_Post;
 
 /**
  * Tasks (private posts of the `todo_task` type) as plain arrays:
- * { id, title, notes, done, status, completedAt, due, time, duration, priority, projectId, position, createdAt, updatedAt }
+ * { id, title, notes, done, status, completedAt, start, due, time, duration, priority, projectId, position, createdAt, updatedAt }
  *
+ * A task can span days: `start` (Y-m-d) to `due`; without `start` it's on `due` only. A multi-day task is all-day.
  * Dates: `due` is a day (Y-m-d), `time` the start on that day (H:i, 24h), `duration` minutes,
  * the rest are ISO 8601 timestamps in UTC. `done` is always `status === 'done'`.
  */
 final class TaskRepository
 {
-    public const FIELDS = ['title', 'notes', 'done', 'status', 'due', 'time', 'duration', 'priority', 'projectId', 'position'];
+    public const FIELDS = ['title', 'notes', 'done', 'status', 'start', 'due', 'time', 'duration', 'priority', 'projectId', 'position'];
 
     public function __construct(private readonly ProjectRepository $projects)
     {
@@ -48,7 +49,7 @@ final class TaskRepository
      */
     public function create(array $data): array|WP_Error
     {
-        if ($error = $this->validate($data)) {
+        if ($error = $this->validate($data, null)) {
             return $error;
         }
 
@@ -84,7 +85,7 @@ final class TaskRepository
             return $this->notFound();
         }
 
-        if ($error = $this->validate($changes)) {
+        if ($error = $this->validate($changes, $this->toArray($post))) {
             return $error;
         }
 
@@ -124,7 +125,7 @@ final class TaskRepository
                 continue;
             }
 
-            $fields = array_intersect_key($task, array_flip(['title', 'notes', 'status', 'due', 'time', 'duration', 'priority', 'position']));
+            $fields = array_intersect_key($task, array_flip(['title', 'notes', 'status', 'start', 'due', 'time', 'duration', 'priority', 'position']));
             $result = $this->create(['projectId' => $toProject] + array_filter($fields, static fn ($value) => $value !== null));
 
             if (is_wp_error($result)) {
@@ -183,20 +184,39 @@ final class TaskRepository
         return $post instanceof WP_Post && $post->post_type === ContentTypes::TASK && $post->post_status === 'private' ? $post : null;
     }
 
-    /** Checks what the REST schema can't: real calendar dates and existing projects. */
-    private function validate(array $data): ?WP_Error
+    /**
+     * Checks what the REST schema can't: real calendar dates, a start that comes with a due day and not after it,
+     * existing projects. `$current` is the task being changed (null when creating).
+     *
+     * @param array<string, mixed>|null $current
+     */
+    private function validate(array $data, ?array $current): ?WP_Error
     {
         // the schema checks length before sanitizing, so "   " gets here as ""
         if (array_key_exists('title', $data) && trim((string) $data['title']) === '') {
             return new WP_Error('todo_task_invalid_title', __('Zadanie musi mieć tytuł.', 'wp-plugin-todo'), ['status' => 400]);
         }
 
-        if (!empty($data['due'])) {
-            [$year, $month, $day] = array_map('intval', explode('-', (string) $data['due']) + [0, 0, 0]);
+        foreach (['due', 'start'] as $field) {
+            if (!empty($data[$field])) {
+                [$year, $month, $day] = array_map('intval', explode('-', (string) $data[$field]) + [0, 0, 0]);
 
-            if (!checkdate($month, $day, $year)) {
-                return new WP_Error('todo_task_invalid_due', __('Nieprawidłowa data.', 'wp-plugin-todo'), ['status' => 400]);
+                if (!checkdate($month, $day, $year)) {
+                    return new WP_Error('todo_task_invalid_due', __('Nieprawidłowa data.', 'wp-plugin-todo'), ['status' => 400]);
+                }
             }
+        }
+
+        // the span as it will be after this change
+        $due = array_key_exists('due', $data) ? ($data['due'] ?: null) : ($current['due'] ?? null);
+        $start = array_key_exists('start', $data) ? ($data['start'] ?: null) : ($current['start'] ?? null);
+
+        if ($start && array_key_exists('start', $data) && !$due) {
+            return new WP_Error('todo_task_start_without_due', __('Zadanie na kilka dni potrzebuje terminu końcowego.', 'wp-plugin-todo'), ['status' => 400]);
+        }
+
+        if ($start && $due && $start > $due) {
+            return new WP_Error('todo_task_invalid_range', __('Początek nie może być po terminie.', 'wp-plugin-todo'), ['status' => 400]);
         }
 
         if (!empty($data['projectId']) && !$this->projects->exists((int) $data['projectId'])) {
@@ -238,11 +258,29 @@ final class TaskRepository
             if ($data['due']) {
                 update_post_meta($id, ContentTypes::META_DUE, $data['due']);
             } else {
-                // a time without a day makes no sense
+                // a time or a start without a day makes no sense
                 delete_post_meta($id, ContentTypes::META_DUE);
+                delete_post_meta($id, ContentTypes::META_START);
                 delete_post_meta($id, ContentTypes::META_TIME);
                 delete_post_meta($id, ContentTypes::META_DURATION);
             }
+        }
+
+        if (array_key_exists('start', $data)) {
+            $due = (string) get_post_meta($id, ContentTypes::META_DUE, true);
+
+            // a start on the due day is just a one-day task
+            if ($data['start'] && $due && $data['start'] < $due) {
+                update_post_meta($id, ContentTypes::META_START, $data['start']);
+            } else {
+                delete_post_meta($id, ContentTypes::META_START);
+            }
+        }
+
+        // a task over several days is all-day
+        if (get_post_meta($id, ContentTypes::META_START, true)) {
+            delete_post_meta($id, ContentTypes::META_TIME);
+            delete_post_meta($id, ContentTypes::META_DURATION);
         }
 
         if (array_key_exists('priority', $data)) {
@@ -312,6 +350,7 @@ final class TaskRepository
             'done' => $done,
             'status' => $this->status($post->ID, $done)->value,
             'completedAt' => get_post_meta($post->ID, ContentTypes::META_COMPLETED_AT, true) ?: null,
+            'start' => get_post_meta($post->ID, ContentTypes::META_START, true) ?: null,
             'due' => get_post_meta($post->ID, ContentTypes::META_DUE, true) ?: null,
             'time' => get_post_meta($post->ID, ContentTypes::META_TIME, true) ?: null,
             'duration' => $duration !== '' && $duration !== false ? (int) $duration : null,

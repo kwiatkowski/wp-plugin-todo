@@ -22,6 +22,7 @@ final class ContentTypes
     public const META_STATUS = '_todo_status';
     public const META_TIME = '_todo_time';
     public const META_DURATION = '_todo_duration';
+    public const META_START = '_todo_start';
     public const META_COLOR = '_todo_color';
     public const META_AREA = '_todo_area';
     public const META_POSITION = '_todo_position';
@@ -113,6 +114,7 @@ final class ContentTypes
             self::META_STATUS => 'string',
             self::META_TIME => 'string',
             self::META_DURATION => 'integer',
+            self::META_START => 'string',
             self::META_POSITION => 'number', // also the order of areas – term meta, a separate table
         ];
 

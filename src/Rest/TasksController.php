@@ -14,8 +14,8 @@ use WP_REST_Server;
 
 /**
  * GET    /todo/v1/tasks
- * POST   /todo/v1/tasks        { title, notes?, done?, status?, due?, time?, duration?, priority?, projectId?, position? }
- * PATCH  /todo/v1/tasks/{id}   any of the above; null clears `due` / `time` / `duration` / `projectId` / `position`,
+ * POST   /todo/v1/tasks        { title, notes?, done?, status?, start?, due?, time?, duration?, priority?, projectId?, position? }
+ * PATCH  /todo/v1/tasks/{id}   any of the above; null clears `start` / `due` / `time` / `duration` / `projectId` / `position`,
  *                              clearing `due` clears `time` and `duration` too; `status` wins over `done`
  * DELETE /todo/v1/tasks/{id}   – to the trash
  */
@@ -98,6 +98,8 @@ final class TasksController extends Controller
             'done' => $this->arg(['type' => 'boolean']),
             'status' => $this->arg(['type' => 'string', 'enum' => Status::values()]),
             'due' => $this->arg(['type' => ['string', 'null'], 'pattern' => '^\d{4}-\d{2}-\d{2}$']),
+            // first day of a task spanning several days, up to `due`
+            'start' => $this->arg(['type' => ['string', 'null'], 'pattern' => '^\d{4}-\d{2}-\d{2}$']),
             'time' => $this->arg(['type' => ['string', 'null'], 'pattern' => '^([01]\d|2[0-3]):[0-5]\d$']),
             'duration' => $this->arg(['type' => ['integer', 'null'], 'minimum' => 5, 'maximum' => 1440]),
             'position' => $this->arg(['type' => ['number', 'null']]),
