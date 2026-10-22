@@ -94,7 +94,7 @@ final class TasksController extends Controller
     {
         return [
             'title' => $this->arg(['type' => 'string', 'required' => $creating, 'minLength' => 1, 'maxLength' => 200], [self::class, 'plainLine']),
-            'notes' => $this->arg(['type' => 'string', 'maxLength' => 5000], [self::class, 'plainText']),
+            'notes' => $this->arg(['type' => 'string', 'maxLength' => 10000], [self::class, 'plainText']),
             'done' => $this->arg(['type' => 'boolean']),
             'status' => $this->arg(['type' => 'string', 'enum' => Status::values()]),
             'due' => $this->arg(['type' => ['string', 'null'], 'pattern' => '^\d{4}-\d{2}-\d{2}$']),

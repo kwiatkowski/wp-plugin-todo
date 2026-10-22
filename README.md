@@ -81,7 +81,8 @@ wyczyszczenie `due` czyści też `start`, `time` i `duration`. Zadanie może trw
 `due` ostatni (`start` musi być ustawiony razem z `due` i nie po nim, inaczej 400; `start` równy `due` zapisuje się jako
 zadanie jednodniowe). Zadanie na kilka dni jest całodniowe – `time` i `duration` są wtedy czyszczone. `position` (liczba lub `null`) to ręczna kolejność zadań –
 aplikacja wstawia przeniesione zadanie między sąsiadów; zadania bez pozycji sortuje po dacie utworzenia. Tekst jest zapisywany dosłownie (bez wycinania „tagów”) –
-nigdy nie jest renderowany jako HTML. Błędy mają format WordPressa: `{ code, message, data: { status } }`.
+nigdy nie jest renderowany jako HTML. `notes` (do 10 000 znaków) to Markdown – aplikacja edytuje go z formatowaniem
+(pogrubienie, kursywa, przekreślenie, kod, listy punktowane, numerowane i `- [ ]` do odhaczenia). Błędy mają format WordPressa: `{ code, message, data: { status } }`.
 
 ## Aplikacja pod `/todo/`
 
