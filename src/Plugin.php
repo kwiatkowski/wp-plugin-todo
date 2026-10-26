@@ -10,7 +10,6 @@ use MKTodo\Domain\AreaCopier;
 use MKTodo\Domain\AreaRepository;
 use MKTodo\Domain\ProjectCopier;
 use MKTodo\Domain\ProjectRepository;
-use MKTodo\Domain\ProjectsMigration;
 use MKTodo\Domain\TaskRepository;
 use MKTodo\Rest\AreasController;
 use MKTodo\Rest\ProjectsController;
@@ -39,20 +38,8 @@ final class Plugin
         (new TasksController($tasks))->register();
         (new AppShell())->register();
         (new DoneCleanup($tasks))->register();
-        (new ProjectsMigration())->register();
-
-        // a project deleted from the list (wp-plugin-projects) – its tasks stay, in the inbox
-        add_action('wp_trash_post', [self::class, 'releaseTasks']);
-        add_action('before_delete_post', [self::class, 'releaseTasks']);
 
         add_filter('mk_core/dashboard/packages', [self::class, 'dashboardCard']);
-    }
-
-    public static function releaseTasks(int $postId): void
-    {
-        if (get_post_type($postId) === ContentTypes::PROJECT) {
-            delete_metadata('post', 0, ContentTypes::META_PROJECT, (string) $postId, true);
-        }
     }
 
     public static function capability(): string
