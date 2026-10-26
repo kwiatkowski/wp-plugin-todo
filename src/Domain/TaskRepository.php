@@ -37,10 +37,23 @@ final class TaskRepository
             'suppress_filters' => false,
         ]);
 
-        // one query for all project relations instead of one per task
-        update_object_term_cache(wp_list_pluck($posts, 'ID'), ContentTypes::TASK);
+        $shown = array_flip(array_column($this->projects->all(), 'id'));
+        $tasks = [];
 
-        return array_map([$this, 'toArray'], $posts);
+        foreach (array_map([$this, 'toArray'], $posts) as $task) {
+            if ($task['projectId'] !== null && !isset($shown[$task['projectId']])) {
+                // a project taken out of Todo hides its tasks with it; one that no longer exists leaves them loose
+                if ($this->projects->isHidden($task['projectId'])) {
+                    continue;
+                }
+
+                $task['projectId'] = null;
+            }
+
+            $tasks[] = $task;
+        }
+
+        return $tasks;
     }
 
     /**
@@ -288,7 +301,9 @@ final class TaskRepository
         }
 
         if (array_key_exists('projectId', $data)) {
-            wp_set_object_terms($id, $data['projectId'] ? [(int) $data['projectId']] : [], ContentTypes::PROJECT);
+            $data['projectId']
+                ? update_post_meta($id, ContentTypes::META_PROJECT, (int) $data['projectId'])
+                : delete_post_meta($id, ContentTypes::META_PROJECT);
         }
     }
 
@@ -337,7 +352,7 @@ final class TaskRepository
     /** @return array<string, mixed> */
     private function toArray(WP_Post $post): array
     {
-        $terms = get_the_terms($post, ContentTypes::PROJECT);
+        $project = (int) get_post_meta($post->ID, ContentTypes::META_PROJECT, true);
         $priority = Priority::tryFrom((string) get_post_meta($post->ID, ContentTypes::META_PRIORITY, true)) ?? Priority::None;
         $done = (bool) get_post_meta($post->ID, ContentTypes::META_DONE, true);
         $duration = get_post_meta($post->ID, ContentTypes::META_DURATION, true);
@@ -355,7 +370,7 @@ final class TaskRepository
             'time' => get_post_meta($post->ID, ContentTypes::META_TIME, true) ?: null,
             'duration' => $duration !== '' && $duration !== false ? (int) $duration : null,
             'priority' => $priority->value,
-            'projectId' => is_array($terms) && $terms ? $terms[0]->term_id : null,
+            'projectId' => $project ?: null,
             'position' => is_numeric($position) ? (float) $position : null,
             'createdAt' => $this->utc($post->post_date_gmt),
             'updatedAt' => $this->utc($post->post_modified_gmt),

@@ -5,15 +5,25 @@ declare(strict_types=1);
 namespace MKTodo;
 
 /**
- * Storage: tasks are a private post type, projects a taxonomy on it.
- * Areas are a second taxonomy on it used for storage only – projects point to them with term meta.
- * Both are hidden from the front end; the admin screens are only a read-only backup view.
+ * Storage: tasks are a private post type; projects are posts of `mk_project` from wp-plugin-projects (one list of
+ * projects for the whole site – Todo shows those with `_project_in_todo`), a task points to one with `_todo_project`.
+ * Areas are a taxonomy on tasks used for storage only – projects point to them with post meta.
+ * Nothing is public on the front end; the admin screens are only a read-only backup view.
+ *
+ * The `todo_project` taxonomy is where projects lived before – kept registered only for the one-time migration
+ * (ProjectsMigration).
  */
 final class ContentTypes
 {
     public const TASK = 'todo_task';
-    public const PROJECT = 'todo_project';
+    public const PROJECT = 'mk_project';
+    public const PROJECT_TAXONOMY = 'todo_project';
     public const AREA = 'todo_area';
+
+    /** task → project (post ID) */
+    public const META_PROJECT = '_todo_project';
+    /** project: shown in Todo – the field `inTodo` of wp-plugin-projects */
+    public const META_IN_TODO = '_project_in_todo';
 
     public const META_DONE = '_todo_done';
     public const META_COMPLETED_AT = '_todo_completed_at';
@@ -65,14 +75,15 @@ final class ContentTypes
             'query_var' => false,
         ]);
 
-        register_taxonomy(self::PROJECT, [self::TASK], [
+        // before projects moved to wp-plugin-projects – read once by ProjectsMigration, otherwise unused
+        register_taxonomy(self::PROJECT_TAXONOMY, [self::TASK], [
             'labels' => [
-                'name' => __('Projekty', 'wp-plugin-todo'),
+                'name' => __('Projekty (stare)', 'wp-plugin-todo'),
                 'singular_name' => __('Projekt', 'wp-plugin-todo'),
             ],
             'public' => false,
-            'show_ui' => true,
-            'show_admin_column' => true,
+            'show_ui' => false,
+            'show_admin_column' => false,
             'show_in_rest' => false,
             'hierarchical' => false,
             'capabilities' => [
@@ -116,6 +127,7 @@ final class ContentTypes
             self::META_DURATION => 'integer',
             self::META_START => 'string',
             self::META_POSITION => 'number', // also the order of areas – term meta, a separate table
+            self::META_PROJECT => 'integer',
         ];
 
         foreach ($meta as $key => $type) {
@@ -127,19 +139,15 @@ final class ContentTypes
             ]);
         }
 
-        register_term_meta(self::PROJECT, self::META_COLOR, [
-            'type' => 'string',
-            'single' => true,
-            'show_in_rest' => false,
-            'auth_callback' => [Plugin::class, 'canUse'],
-        ]);
-
-        register_term_meta(self::PROJECT, self::META_AREA, [
-            'type' => 'integer',
-            'single' => true,
-            'show_in_rest' => false,
-            'auth_callback' => [Plugin::class, 'canUse'],
-        ]);
+        // Todo's own fields of a project, on the project post of wp-plugin-projects
+        foreach ([self::META_COLOR => 'string', self::META_AREA => 'integer', self::META_POSITION => 'integer'] as $key => $type) {
+            register_post_meta(self::PROJECT, $key, [
+                'type' => $type,
+                'single' => true,
+                'show_in_rest' => false,
+                'auth_callback' => [Plugin::class, 'canUse'],
+            ]);
+        }
 
         register_term_meta(self::AREA, self::META_POSITION, [
             'type' => 'integer',
@@ -150,13 +158,6 @@ final class ContentTypes
 
         register_term_meta(self::AREA, self::META_ICON, [
             'type' => 'string',
-            'single' => true,
-            'show_in_rest' => false,
-            'auth_callback' => [Plugin::class, 'canUse'],
-        ]);
-
-        register_term_meta(self::PROJECT, self::META_POSITION, [
-            'type' => 'integer',
             'single' => true,
             'show_in_rest' => false,
             'auth_callback' => [Plugin::class, 'canUse'],

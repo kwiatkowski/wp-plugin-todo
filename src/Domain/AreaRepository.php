@@ -135,7 +135,8 @@ final class AreaRepository
             return $this->error($result);
         }
 
-        delete_metadata('term', 0, ContentTypes::META_AREA, $id, true);
+        // projects are posts of wp-plugin-projects – the area is their post meta
+        delete_metadata('post', 0, ContentTypes::META_AREA, (string) $id, true);
 
         return true;
     }

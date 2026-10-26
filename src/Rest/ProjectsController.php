@@ -15,7 +15,7 @@ use WP_REST_Server;
  * GET    /todo/v1/projects
  * POST   /todo/v1/projects        { name, color?, areaId? }
  * PATCH  /todo/v1/projects/{id}   { name?, color?, areaId? } – null `areaId` clears the area
- * DELETE /todo/v1/projects/{id}   – tasks move to the inbox
+ * DELETE /todo/v1/projects/{id}   – out of Todo (the project stays on the list of projects, its tasks hidden with it)
  * POST   /todo/v1/projects/{id}/copy { name?, tasks?: bool } – a copy below the original, same area and colour,
  *                                      named `name` or "Name (kopia)" (and its open tasks); returns the new project
  * POST   /todo/v1/projects/order  { ids: [5, 2, 9] } – these projects in this order (one area); returns all projects

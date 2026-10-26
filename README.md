@@ -6,7 +6,8 @@ REST API `todo/v1` i serwowanie aplikacji pod `/todo/` z logowaniem WordPressa.
 ## Wymagania
 
 - PHP 8.1+, WordPress 6.5+
-- bez zależności (bez ACF) – wszystko na typach treści i meta WordPressa
+- [wp-plugin-projects](https://github.com/kwiatkowski/wp-plugin-projects) – lista projektów (bez niej Todo działa, ale bez projektów)
+- bez ACF – wszystko na typach treści i meta WordPressa
 
 ## Instalacja
 
@@ -24,9 +25,13 @@ Aplikację Vue klonuje się do `{web root}/todo` – szczegóły w jej README.
 
 | | Typ WordPressa | Pola |
 | --- | --- | --- |
-| Zadanie | post type `todo_task`, status `private` | tytuł, notatki (treść), `_todo_done`, `_todo_status`, `_todo_completed_at`, `_todo_start` (RRRR-MM-DD, pierwszy dzień zadania na kilka dni), `_todo_due` (RRRR-MM-DD), `_todo_time` (GG:MM), `_todo_duration` (minuty), `_todo_priority`, `_todo_position` (kolejność) |
-| Projekt | taksonomia `todo_project` | nazwa, `_todo_color`, `_todo_area` (ID kategorii), `_todo_position` (kolejność w kategorii) |
+| Zadanie | post type `todo_task`, status `private` | tytuł, notatki (treść), `_todo_project` (ID projektu), `_todo_done`, `_todo_status`, `_todo_completed_at`, `_todo_start` (RRRR-MM-DD, pierwszy dzień zadania na kilka dni), `_todo_due` (RRRR-MM-DD), `_todo_time` (GG:MM), `_todo_duration` (minuty), `_todo_priority`, `_todo_position` (kolejność) |
+| Projekt | wpis `mk_project` z [wp-plugin-projects](https://github.com/kwiatkowski/wp-plugin-projects) – w Todo te z `_project_in_todo` | nazwa (tytuł), `_todo_color`, `_todo_area` (ID kategorii), `_todo_position` (kolejność w kategorii) |
 | Kategoria | taksonomia `todo_area` (tylko jako magazyn – zadania nie są do niej przypisywane) | nazwa, `_todo_position` (kolejność), `_todo_icon` (klucz ikony) |
+
+Projekty to jedna lista dla całej strony – ta sama co pod `/projects/`; w Todo są te z włączonym „Pokaż w Todo”.
+Projekty żyły wcześniej w taksonomii `todo_project` – `ProjectsMigration` przeniósł je raz na listę (opcja
+`wp_plugin_todo_projects_migrated`, mapa termów na wpisy); termy zostały jako kopia.
 
 Kategorie grupują projekty (np. „Praca”, „Dom”). Te dwie powstają przy pierwszym odczycie `/areas`
 (opcja `wp_plugin_todo_areas_seeded`) – potem można je zmieniać i usuwać. Usunięcie kategorii zostawia
@@ -47,9 +52,9 @@ Dostęp: zalogowany użytkownik z uprawnieniem `manage_options` (filtr `wp_plugi
 | PATCH | `/tasks/{id}` | dowolne z powyższych; `null` czyści `start` / `due` / `time` / `duration` / `projectId` / `position` |
 | DELETE | `/tasks/{id}` | – (do kosza) |
 | GET | `/projects` | – |
-| POST | `/projects` | `{ name, color?, areaId? }` |
+| POST | `/projects` | `{ name, color?, areaId? }` – nowy projekt na liście, od razu w Todo |
 | PATCH | `/projects/{id}` | `{ name?, color?, areaId? }`; `null` czyści `areaId` |
-| DELETE | `/projects/{id}` | – (zadania przechodzą do Skrzynki) |
+| DELETE | `/projects/{id}` | – ukrywa projekt w Todo razem z zadaniami (zostaje na liście projektów; „Pokaż w Todo” przywraca oba). Usunięcie projektu z listy przenosi jego zadania do „Do posortowania” |
 | POST | `/projects/{id}/copy` | `{ name?, tasks?: bool }` – kopia pod oryginałem, ta sama kategoria i kolor, nazwa `name` albo „Nazwa (kopia)” (i kopie otwartych zadań); zwraca nowy projekt |
 | POST | `/projects/order` | `{ ids: [5, 2, 9] }` – te projekty w tej kolejności (zwykle jednej kategorii); zwraca wszystkie projekty |
 | GET | `/areas` | – |
