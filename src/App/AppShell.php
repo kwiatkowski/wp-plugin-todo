@@ -142,6 +142,8 @@ final class AppShell
             ],
             'logoutUrl' => html_entity_decode(wp_logout_url(self::host() !== null ? self::url() : home_url('/')), ENT_QUOTES, 'UTF-8'),
             'adminUrl' => admin_url(),
+            // the list of projects, when its plugin is here – the account menu leads there (one family of apps)
+            'projectsUrl' => class_exists(\MKProjects\App\AppShell::class) ? \MKProjects\App\AppShell::url() : null,
             'version' => WP_PLUGIN_TODO_VERSION,
             // finished tasks are trashed this many days after (0 = kept)
             'doneRetentionDays' => DoneCleanup::retentionDays(),
