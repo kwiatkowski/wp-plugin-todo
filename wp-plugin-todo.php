@@ -5,7 +5,7 @@
  * Author: Marcin Kwiatkowski
  * Author URI: https://kwiatkowski.co
  * Text Domain: wp-plugin-todo
- * Version: 2026.10.30.3
+ * Version: 2026.10.30.4
  * Requires PHP: 8.1
  */
 
@@ -15,7 +15,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('WP_PLUGIN_TODO_VERSION', '2026.10.30.3');
+define('WP_PLUGIN_TODO_VERSION', '2026.10.30.4');
 define('WP_PLUGIN_TODO_FILE', __FILE__);
 
 spl_autoload_register(static function (string $class): void {
