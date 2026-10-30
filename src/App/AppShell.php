@@ -9,7 +9,9 @@ use MKTodo\Plugin;
 use WP;
 
 /**
- * Serves the Vue app under /todo/ (and every deeper path – the app has its own router).
+ * Serves the Vue app under /todo/ (and every deeper path – the app has its own router) – or, with its own host
+ * (TODO_APP_HOST, e.g. todo.kwiatkowski.co: a subdomain pointing at the same WordPress), at that host's root;
+ * the old /todo/ addresses then lead there (301). The login cookies must then be the whole domain's (COOKIE_DOMAIN).
  *
  * The built index.html is read from disk and gets the runtime config injected (REST URL, nonce, user),
  * so the API works with the normal WordPress login cookie and no secret ever lands in the JS bundle.
@@ -21,6 +23,32 @@ final class AppShell
     {
         add_action('parse_request', [$this, 'maybeServe'], 0);
         add_action('admin_bar_menu', [$this, 'adminBar'], 80);
+
+        if (self::host() !== null) {
+            // the login and logout on the site come back to the app's host
+            add_filter('allowed_redirect_hosts', static fn (array $hosts): array => [...$hosts, (string) self::host()]);
+        }
+    }
+
+    /** the app's own host – TODO_APP_HOST (a constant, or the environment); null: under /todo/ of the site */
+    public static function host(): ?string
+    {
+        $host = defined('TODO_APP_HOST') ? (string) constant('TODO_APP_HOST') : (string) ($_ENV['TODO_APP_HOST'] ?? $_SERVER['TODO_APP_HOST'] ?? getenv('TODO_APP_HOST') ?: '');
+        $host = strtolower(trim($host));
+
+        return $host !== '' ? $host : null;
+    }
+
+    /** whether this request came to the app's own host */
+    private static function onHost(): bool
+    {
+        return self::host() !== null && strtolower((string) ($_SERVER['HTTP_HOST'] ?? '')) === self::host();
+    }
+
+    /** a URL of the site on the app's own host – when the page is shown there (the REST API and the nonce, same origin) */
+    private static function local(string $url): string
+    {
+        return self::onHost() ? (string) preg_replace('#^https?://[^/]+#i', 'https://' . self::host(), $url) : $url;
     }
 
     public static function path(): string
@@ -30,15 +58,26 @@ final class AppShell
 
     public static function url(): string
     {
-        return home_url('/' . self::path() . '/');
+        return self::host() !== null ? 'https://' . self::host() . '/' : home_url('/' . self::path() . '/');
     }
 
     public function maybeServe(WP $wp): void
     {
         $path = self::path();
 
-        if ($wp->request !== $path && !str_starts_with($wp->request, $path . '/')) {
+        // the app's own host: the app at every path but the REST API's
+        if (self::onHost()) {
+            if (isset($wp->query_vars['rest_route']) || str_starts_with($wp->request, 'wp-json')) {
+                return;
+            }
+        } elseif ($wp->request !== $path && !str_starts_with($wp->request, $path . '/')) {
             return;
+        } elseif (self::host() !== null) {
+            // the old address – to the same place on the app's host
+            $rest = ltrim(substr($wp->request, strlen($path)), '/');
+            $query = (string) ($_SERVER['QUERY_STRING'] ?? '');
+            wp_redirect(self::url() . $rest . ($query !== '' ? '?' . $query : ''), 301);
+            exit;
         }
 
         if (!is_user_logged_in()) {
@@ -92,16 +131,16 @@ final class AppShell
         $user = wp_get_current_user();
 
         return [
-            'restUrl' => esc_url_raw(rest_url('todo/v1/')),
+            'restUrl' => esc_url_raw(self::local(rest_url('todo/v1/'))),
             'nonce' => wp_create_nonce('wp_rest'),
             // core endpoint that hands out a fresh REST nonce – used when the tab stays open past the nonce lifetime
-            'nonceUrl' => admin_url('admin-ajax.php?action=rest-nonce'),
+            'nonceUrl' => self::local(admin_url('admin-ajax.php?action=rest-nonce')),
             'basePath' => (string) wp_parse_url(self::url(), PHP_URL_PATH),
             'user' => [
                 'name' => $user->display_name,
                 'avatar' => get_avatar_url($user->ID, ['size' => 64]),
             ],
-            'logoutUrl' => html_entity_decode(wp_logout_url(home_url('/')), ENT_QUOTES, 'UTF-8'),
+            'logoutUrl' => html_entity_decode(wp_logout_url(self::host() !== null ? self::url() : home_url('/')), ENT_QUOTES, 'UTF-8'),
             'adminUrl' => admin_url(),
             'version' => WP_PLUGIN_TODO_VERSION,
             // finished tasks are trashed this many days after (0 = kept)

@@ -90,6 +90,11 @@ nigdy nie jest renderowany jako HTML. `notes` (do 10 000 znaków) to Markdown �
 rename-wp-login), zalogowanemu oddaje `web/index.html` aplikacji z `window.__TODO__` (REST URL, nonce,
 użytkownik, wylogowanie). Dodaje też skrót *Todo* w pasku admina.
 
+Własny host: stała (albo zmienna środowiska) `TODO_APP_HOST`, np. `todo.kwiatkowski.co` – subdomena wskazująca na ten
+sam WordPress (`public_html/web`). Aplikacja działa wtedy od korzenia tej domeny (REST i nonce z tej samej domeny),
+a stare adresy `/todo/…` przekierowują tam kodem 301. Logowanie musi być wspólne dla całej domeny:
+`COOKIE_DOMAIN` = `.kwiatkowski.co`. Bez stałej – po staremu pod `/todo/`.
+
 ## Filtry
 
 | Filtr | Domyślnie | Do czego |
