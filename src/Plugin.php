@@ -10,6 +10,7 @@ use MKTodo\Domain\AreaCopier;
 use MKTodo\Domain\AreaRepository;
 use MKTodo\Domain\ProjectCopier;
 use MKTodo\Domain\ProjectRepository;
+use MKTodo\Domain\TaskActivity;
 use MKTodo\Domain\TaskRepository;
 use MKTodo\Rest\AreasController;
 use MKTodo\Rest\ProjectsController;
@@ -30,12 +31,13 @@ final class Plugin
     {
         $areas = new AreaRepository();
         $projects = new ProjectRepository($areas);
-        $tasks = new TaskRepository($projects);
+        $activity = new TaskActivity();
+        $tasks = new TaskRepository($projects, $activity);
 
         (new ContentTypes())->register();
         (new AreasController($areas, new AreaCopier($areas, $projects, $tasks)))->register();
         (new ProjectsController($projects, new ProjectCopier($projects, $tasks)))->register();
-        (new TasksController($tasks))->register();
+        (new TasksController($tasks, $activity))->register();
         (new AppShell())->register();
         (new DoneCleanup($tasks))->register();
 

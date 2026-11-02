@@ -6,6 +6,7 @@ namespace MKTodo\Rest;
 
 use MKTodo\Domain\Priority;
 use MKTodo\Domain\Status;
+use MKTodo\Domain\TaskActivity;
 use MKTodo\Domain\TaskRepository;
 use WP_Error;
 use WP_REST_Request;
@@ -18,11 +19,16 @@ use WP_REST_Server;
  * PATCH  /todo/v1/tasks/{id}   any of the above; null clears `start` / `due` / `time` / `duration` / `projectId` / `position`,
  *                              clearing `due` clears `time` and `duration` too; `status` wins over `done`
  * DELETE /todo/v1/tasks/{id}   – to the trash
+ * GET    /todo/v1/tasks/{id}/activity          – { comments, history }, oldest first
+ * POST   /todo/v1/tasks/{id}/comments          { text }
+ * DELETE /todo/v1/tasks/{id}/comments/{comment}
  */
 final class TasksController extends Controller
 {
-    public function __construct(private readonly TaskRepository $tasks)
-    {
+    public function __construct(
+        private readonly TaskRepository $tasks,
+        private readonly TaskActivity $activity,
+    ) {
     }
 
     public function registerRoutes(): void
@@ -55,6 +61,45 @@ final class TasksController extends Controller
                 'permission_callback' => [$this, 'permission'],
             ],
         ]);
+
+        register_rest_route(self::NAMESPACE, '/tasks/(?P<id>\d+)/activity', [
+            'args' => ['id' => ['type' => 'integer', 'required' => true]],
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => fn (WP_REST_Request $request) => $this->withTask($request, fn (int $id) => $this->activity->of($id)),
+            'permission_callback' => [$this, 'permission'],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/tasks/(?P<id>\d+)/comments', [
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+                'text' => $this->arg(['type' => 'string', 'required' => true, 'minLength' => 1, 'maxLength' => 5000], [self::class, 'plainText']),
+            ],
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => fn (WP_REST_Request $request) => $this->withTask($request, fn (int $id) => $this->activity->comment($id, (string) $request['text']), 201),
+            'permission_callback' => [$this, 'permission'],
+        ]);
+
+        register_rest_route(self::NAMESPACE, '/tasks/(?P<id>\d+)/comments/(?P<comment>\d+)', [
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+                'comment' => ['type' => 'integer', 'required' => true],
+            ],
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => fn (WP_REST_Request $request) => $this->withTask($request, function (int $id) use ($request) {
+                $result = $this->activity->removeComment($id, (int) $request['comment']);
+
+                return $result === true ? ['deleted' => true] : $result;
+            }),
+            'permission_callback' => [$this, 'permission'],
+        ]);
+    }
+
+    /** runs $action for an existing task – a 404 for one that's gone (or in the trash) */
+    private function withTask(WP_REST_Request $request, callable $action, int $status = 200): WP_REST_Response|WP_Error
+    {
+        $task = $this->tasks->find((int) $request['id']);
+
+        return $this->respond(is_wp_error($task) ? $task : $action($task['id']), $status);
     }
 
     public function create(WP_REST_Request $request): WP_REST_Response|WP_Error

@@ -20,8 +20,10 @@ final class TaskRepository
 {
     public const FIELDS = ['title', 'notes', 'done', 'status', 'start', 'due', 'time', 'duration', 'priority', 'projectId', 'position'];
 
-    public function __construct(private readonly ProjectRepository $projects)
-    {
+    public function __construct(
+        private readonly ProjectRepository $projects,
+        private readonly ?TaskActivity $activity = null,
+    ) {
     }
 
     /** @return array<int, array<string, mixed>> */
@@ -69,6 +71,7 @@ final class TaskRepository
         }
 
         $this->saveFields($id, $data + ['priority' => Priority::None->value]);
+        $this->activity?->created($id);
 
         return $this->find($id);
     }
@@ -85,7 +88,9 @@ final class TaskRepository
             return $this->notFound();
         }
 
-        if ($error = $this->validate($changes, $this->toArray($post))) {
+        $before = $this->toArray($post);
+
+        if ($error = $this->validate($changes, $before)) {
             return $error;
         }
 
@@ -110,8 +115,13 @@ final class TaskRepository
         }
 
         clean_post_cache($id);
+        $after = $this->find($id);
 
-        return $this->find($id);
+        if (!is_wp_error($after)) {
+            $this->activity?->changed($id, $before, $after);
+        }
+
+        return $after;
     }
 
     /**

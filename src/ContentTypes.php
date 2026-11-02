@@ -27,6 +27,9 @@ final class ContentTypes
     public const META_AREA = '_todo_area';
     public const META_POSITION = '_todo_position';
     public const META_ICON = '_todo_icon';
+    // a task's comments and history – one row each (TaskActivity)
+    public const META_COMMENT = '_todo_comment';
+    public const META_EVENT = '_todo_event';
 
     public function register(): void
     {
