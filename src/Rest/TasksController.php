@@ -21,6 +21,7 @@ use WP_REST_Server;
  * DELETE /todo/v1/tasks/{id}   – to the trash
  * GET    /todo/v1/tasks/{id}/activity          – { comments, history }, oldest first
  * POST   /todo/v1/tasks/{id}/comments          { text }
+ * PATCH  /todo/v1/tasks/{id}/comments/{comment} { text }
  * DELETE /todo/v1/tasks/{id}/comments/{comment}
  */
 final class TasksController extends Controller
@@ -84,13 +85,23 @@ final class TasksController extends Controller
                 'id' => ['type' => 'integer', 'required' => true],
                 'comment' => ['type' => 'integer', 'required' => true],
             ],
-            'methods' => WP_REST_Server::DELETABLE,
-            'callback' => fn (WP_REST_Request $request) => $this->withTask($request, function (int $id) use ($request) {
-                $result = $this->activity->removeComment($id, (int) $request['comment']);
+            [
+                'methods' => WP_REST_Server::EDITABLE,
+                'callback' => fn (WP_REST_Request $request) => $this->withTask($request, fn (int $id) => $this->activity->editComment($id, (int) $request['comment'], (string) $request['text'])),
+                'permission_callback' => [$this, 'permission'],
+                'args' => [
+                    'text' => $this->arg(['type' => 'string', 'required' => true, 'minLength' => 1, 'maxLength' => 5000], [self::class, 'plainText']),
+                ],
+            ],
+            [
+                'methods' => WP_REST_Server::DELETABLE,
+                'callback' => fn (WP_REST_Request $request) => $this->withTask($request, function (int $id) use ($request) {
+                    $result = $this->activity->removeComment($id, (int) $request['comment']);
 
-                return $result === true ? ['deleted' => true] : $result;
-            }),
-            'permission_callback' => [$this, 'permission'],
+                    return $result === true ? ['deleted' => true] : $result;
+                }),
+                'permission_callback' => [$this, 'permission'],
+            ],
         ]);
     }
 

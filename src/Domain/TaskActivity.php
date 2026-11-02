@@ -12,17 +12,17 @@ use WP_Term;
  * A task's comments and history – rows of its post meta (one row each, JSON), so they go with the task to the trash
  * and back and nothing shows up in wp-admin's comments.
  *
- * Comment: { id, text, createdAt, author }
- * Event:   { id, type: created|changed|commented, createdAt, author, changes: [{ field, from, to }], text } – `notes`
+ * Comment: { id, text, createdAt, author, editedAt }
+ * Event:   { id, type: created|changed|commented|commentEdited, createdAt, author, changes: [{ field, from, to }], text } – `notes`
  *          only says it changed (from and to null), `projectId` keeps the project's name as it was then; `text` is the
  *          start of the comment (commented, else null).
  */
 final class TaskActivity
 {
-    /** what the history follows – the order of the task's fields; a moved task (position) isn't a change worth a line */
     /** how much of a comment the history keeps */
     private const EXCERPT = 200;
 
+    /** what the history follows – the order of the task's fields; a moved task (position) isn't a change worth a line */
     private const TRACKED = ['title', 'status', 'projectId', 'priority', 'start', 'due', 'time', 'duration', 'notes'];
 
     /** @return array{comments: array<int, array<string, mixed>>, history: array<int, array<string, mixed>>} */
@@ -44,7 +44,10 @@ final class TaskActivity
             ];
 
             if ($row->meta_key === ContentTypes::META_COMMENT) {
-                $activity['comments'][] = $base + ['text' => (string) ($data['text'] ?? '')];
+                $activity['comments'][] = $base + [
+                    'text' => (string) ($data['text'] ?? ''),
+                    'editedAt' => isset($data['editedAt']) ? (string) $data['editedAt'] : null,
+                ];
             } else {
                 $activity['history'][] = $base + [
                     'type' => (string) ($data['type'] ?? 'changed'),
@@ -75,21 +78,45 @@ final class TaskActivity
             return new WP_Error('todo_comment_failed', __('Nie udało się dodać komentarza.', 'wp-plugin-todo'), ['status' => 500]);
         }
 
-        foreach ($this->of($taskId)['comments'] as $comment) {
-            if ($comment['id'] === $id) {
-                return $comment;
-            }
+        return $this->findComment($taskId, $id) ?? new WP_Error('todo_comment_failed', __('Nie udało się dodać komentarza.', 'wp-plugin-todo'), ['status' => 500]);
+    }
+
+    /** @return array<string, mixed>|WP_Error the comment with its new text – its date and author stay, editedAt is now */
+    public function editComment(int $taskId, int $commentId, string $text): array|WP_Error
+    {
+        if ($text === '') {
+            return new WP_Error('todo_comment_empty', __('Komentarz nie może być pusty.', 'wp-plugin-todo'), ['status' => 400]);
         }
 
-        return new WP_Error('todo_comment_failed', __('Nie udało się dodać komentarza.', 'wp-plugin-todo'), ['status' => 500]);
+        $row = $this->commentRow($taskId, $commentId);
+
+        if (!$row) {
+            return $this->commentNotFound();
+        }
+
+        $data = (array) json_decode((string) $row->meta_value, true);
+
+        // the same text – nothing to save, nothing for the history
+        if (($data['text'] ?? '') === $text) {
+            return $this->findComment($taskId, $commentId) ?? $this->commentNotFound();
+        }
+
+        $data = ['text' => $text, 'editedAt' => gmdate(DATE_ATOM)] + $data;
+
+        // unlike add_post_meta(), update_metadata_by_mid() doesn't unslash – the JSON goes as it is
+        if (!update_metadata_by_mid('post', $commentId, (string) wp_json_encode($data, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))) {
+            return new WP_Error('todo_comment_failed', __('Nie udało się zapisać komentarza.', 'wp-plugin-todo'), ['status' => 500]);
+        }
+
+        $this->add($taskId, ContentTypes::META_EVENT, ['type' => 'commentEdited', 'text' => mb_substr($text, 0, self::EXCERPT)]);
+
+        return $this->findComment($taskId, $commentId) ?? $this->commentNotFound();
     }
 
     public function removeComment(int $taskId, int $commentId): true|WP_Error
     {
-        $mine = array_filter($this->rows($taskId), static fn (object $row): bool => (int) $row->meta_id === $commentId && $row->meta_key === ContentTypes::META_COMMENT);
-
-        if (!$mine) {
-            return new WP_Error('todo_comment_not_found', __('Nie ma takiego komentarza.', 'wp-plugin-todo'), ['status' => 404]);
+        if (!$this->commentRow($taskId, $commentId)) {
+            return $this->commentNotFound();
         }
 
         return delete_metadata_by_mid('post', $commentId) ? true : new WP_Error('todo_comment_delete_failed', __('Nie udało się usunąć komentarza.', 'wp-plugin-todo'), ['status' => 500]);
@@ -129,6 +156,35 @@ final class TaskActivity
         if ($changes) {
             $this->add($taskId, ContentTypes::META_EVENT, ['type' => 'changed', 'changes' => $changes]);
         }
+    }
+
+    /** @return array<string, mixed>|null the comment as of() gives it */
+    private function findComment(int $taskId, int $commentId): ?array
+    {
+        foreach ($this->of($taskId)['comments'] as $comment) {
+            if ($comment['id'] === $commentId) {
+                return $comment;
+            }
+        }
+
+        return null;
+    }
+
+    /** the comment's row – only of this task */
+    private function commentRow(int $taskId, int $commentId): ?object
+    {
+        foreach ($this->rows($taskId) as $row) {
+            if ((int) $row->meta_id === $commentId && $row->meta_key === ContentTypes::META_COMMENT) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    private function commentNotFound(): WP_Error
+    {
+        return new WP_Error('todo_comment_not_found', __('Nie ma takiego komentarza.', 'wp-plugin-todo'), ['status' => 404]);
     }
 
     /** @param array<string, mixed> $data */
