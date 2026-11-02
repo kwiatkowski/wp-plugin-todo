@@ -12,8 +12,10 @@ use MKTodo\Domain\ProjectCopier;
 use MKTodo\Domain\ProjectRepository;
 use MKTodo\Domain\TaskActivity;
 use MKTodo\Domain\TaskRepository;
+use MKTodo\Domain\TaskSummary;
 use MKTodo\Rest\AreasController;
 use MKTodo\Rest\ProjectsController;
+use MKTodo\Rest\SummaryController;
 use MKTodo\Rest\TasksController;
 
 /**
@@ -38,10 +40,19 @@ final class Plugin
         (new AreasController($areas, new AreaCopier($areas, $projects, $tasks)))->register();
         (new ProjectsController($projects, new ProjectCopier($projects, $tasks)))->register();
         (new TasksController($tasks, $activity))->register();
+        // today's tasks for Home Assistant – read only, with a token of its own
+        (new SummaryController(new TaskSummary($tasks, $projects, $areas)))->register();
         (new AppShell())->register();
         (new DoneCleanup($tasks))->register();
 
         add_filter('mk_core/dashboard/packages', [self::class, 'dashboardCard']);
+
+        if (defined('WP_CLI') && WP_CLI) {
+            // a new token for GET todo/v1/summary – printed once, the old one stops working
+            \WP_CLI::add_command('todo summary-token', static function (): void {
+                \WP_CLI::line(SummaryController::newToken());
+            });
+        }
     }
 
     public static function capability(): string
