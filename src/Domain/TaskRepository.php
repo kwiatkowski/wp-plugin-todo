@@ -10,7 +10,8 @@ use WP_Post;
 
 /**
  * Tasks (private posts of the `todo_task` type) as plain arrays:
- * { id, title, notes, done, status, completedAt, start, due, time, duration, priority, projectId, position, createdAt, updatedAt }
+ * { id, title, notes, done, status, completedAt, start, due, time, duration, priority, projectId, position, createdAt, updatedAt,
+ *   comments } – `comments` is how many it has (TaskActivity)
  *
  * A task can span days: `start` (Y-m-d) to `due`; without `start` it's on `due` only. A multi-day task is all-day.
  * Dates: `due` is a day (Y-m-d), `time` the start on that day (H:i, 24h), `duration` minutes,
@@ -369,6 +370,8 @@ final class TaskRepository
             'position' => is_numeric($position) ? (float) $position : null,
             'createdAt' => $this->utc($post->post_date_gmt),
             'updatedAt' => $this->utc($post->post_modified_gmt),
+            // from the meta cache get_posts() filled – no query of its own
+            'comments' => count(get_post_meta($post->ID, ContentTypes::META_COMMENT)),
         ];
     }
 

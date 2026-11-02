@@ -14,7 +14,8 @@ use WP_Term;
  *
  * Comment: { id, text, createdAt, author, editedAt }
  * Event:   { id, type: created|changed|commented|commentEdited, createdAt, author, changes: [{ field, from, to }], text } – `notes`
- *          only says it changed (from and to null), `projectId` keeps the project's name as it was then; `text` is the
+ *          only says it changed (from and to null), `projectId` keeps the project's name as it was then, `when` is
+ *          { start, due, time, duration } (earlier events have those four as fields of their own); `text` is the
  *          start of the comment (commented, else null).
  */
 final class TaskActivity
@@ -22,8 +23,12 @@ final class TaskActivity
     /** how much of a comment the history keeps */
     private const EXCERPT = 200;
 
-    /** what the history follows – the order of the task's fields; a moved task (position) isn't a change worth a line */
-    private const TRACKED = ['title', 'status', 'projectId', 'priority', 'start', 'due', 'time', 'duration', 'notes'];
+    /**
+     * what the history follows – the order of the task's fields; `when` stands for the day, span, time and duration,
+     * set together in the app and shown as one line. A moved task (position) isn't a change worth a line.
+     */
+    private const TRACKED = ['title', 'status', 'projectId', 'priority', 'when', 'notes'];
+    private const WHEN = ['start', 'due', 'time', 'duration'];
 
     /** @return array{comments: array<int, array<string, mixed>>, history: array<int, array<string, mixed>>} */
     public function of(int $taskId): array
@@ -139,8 +144,9 @@ final class TaskActivity
         $changes = [];
 
         foreach (self::TRACKED as $field) {
-            $from = $before[$field] ?? null;
-            $to = $after[$field] ?? null;
+            // the day as a whole: all four before and after – "2 lis" → "2–3 lis" reads as one change
+            $from = $field === 'when' ? $this->when($before) : ($before[$field] ?? null);
+            $to = $field === 'when' ? $this->when($after) : ($after[$field] ?? null);
 
             if ($from === $to) {
                 continue;
@@ -206,6 +212,15 @@ final class TaskActivity
             ContentTypes::META_COMMENT,
             ContentTypes::META_EVENT,
         ));
+    }
+
+    /**
+     * @param array<string, mixed> $task
+     * @return array{start: mixed, due: mixed, time: mixed, duration: mixed}
+     */
+    private function when(array $task): array
+    {
+        return array_combine(self::WHEN, array_map(static fn (string $field): mixed => $task[$field] ?? null, self::WHEN));
     }
 
     private function projectName(mixed $id): ?string
