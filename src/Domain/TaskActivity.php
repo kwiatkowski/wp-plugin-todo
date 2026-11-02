@@ -13,12 +13,16 @@ use WP_Term;
  * and back and nothing shows up in wp-admin's comments.
  *
  * Comment: { id, text, createdAt, author }
- * Event:   { id, type: created|changed, createdAt, author, changes: [{ field, from, to }] } – `notes` only says it
- *          changed (from and to null), `projectId` keeps the project's name as it was then.
+ * Event:   { id, type: created|changed|commented, createdAt, author, changes: [{ field, from, to }], text } – `notes`
+ *          only says it changed (from and to null), `projectId` keeps the project's name as it was then; `text` is the
+ *          start of the comment (commented, else null).
  */
 final class TaskActivity
 {
     /** what the history follows – the order of the task's fields; a moved task (position) isn't a change worth a line */
+    /** how much of a comment the history keeps */
+    private const EXCERPT = 200;
+
     private const TRACKED = ['title', 'status', 'projectId', 'priority', 'start', 'due', 'time', 'duration', 'notes'];
 
     /** @return array{comments: array<int, array<string, mixed>>, history: array<int, array<string, mixed>>} */
@@ -45,6 +49,7 @@ final class TaskActivity
                 $activity['history'][] = $base + [
                     'type' => (string) ($data['type'] ?? 'changed'),
                     'changes' => array_values((array) ($data['changes'] ?? [])),
+                    'text' => isset($data['text']) ? (string) $data['text'] : null,
                 ];
             }
         }
@@ -60,6 +65,11 @@ final class TaskActivity
         }
 
         $id = $this->add($taskId, ContentTypes::META_COMMENT, ['text' => $text]);
+
+        if ($id) {
+            // the history keeps the start of it – the comment itself may be deleted later
+            $this->add($taskId, ContentTypes::META_EVENT, ['type' => 'commented', 'text' => mb_substr($text, 0, self::EXCERPT)]);
+        }
 
         if (!$id) {
             return new WP_Error('todo_comment_failed', __('Nie udało się dodać komentarza.', 'wp-plugin-todo'), ['status' => 500]);
